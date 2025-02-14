@@ -51,5 +51,5 @@ def serve_output(filename):
     app.logger.debug(f'Serving file: {filename}')
     return send_from_directory('output', filename, as_attachment=False)
 
-if __name__ == '__main__':
-    app.run(debug=True)
+def handler(event, context):
+    return app(event, context)
