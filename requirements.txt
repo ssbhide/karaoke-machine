@@ -7,7 +7,9 @@ certifi==2024.12.14
 charset-normalizer==3.4.1
 click==8.1.8
 cloudpickle==3.1.0
+Cython==3.0.12
 demucs==4.0.1
+diffq==0.2.4
 dora_search==0.1.12
 einops==0.8.0
 ffmpeg-python==0.2.0
