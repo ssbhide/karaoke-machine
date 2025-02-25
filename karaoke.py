@@ -1,45 +1,42 @@
 from flask import Flask, render_template, request, redirect, url_for, send_from_directory
 import os
+import subprocess
 import logging
-import torch
 from werkzeug.utils import secure_filename
-from demucs.apply import apply_model
-from demucs.pretrained import get_model
-from demucs.audio import AudioFile, save_audio
-import numpy as np
 
 # Flask App Configuration
-app = Flask(__name__, template_folder='app/templates')
+app = Flask(__name__, template_folder='templates')
 
-UPLOAD_FOLDER = '/tmp/uploads'
-OUTPUT_FOLDER = '/tmp/output'
+# Use regular paths instead of /tmp since we're on a VM
+UPLOAD_FOLDER = 'uploads'
+OUTPUT_FOLDER = 'output'
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 logging.basicConfig(level=logging.DEBUG)
 
 def separate_audio(input_path, output_path, base_filename):
-    """ Runs Demucs audio separation on an uploaded file. """
-    device = torch.device("cpu")  # Ensure CPU execution
-    model = get_model('mdx_extra_q')
-    model.to(device)
-    model.eval()
-
-    # Load and process audio file
-    audio = AudioFile(input_path).read()
-    audio = torch.from_numpy(audio).float().mean(0, keepdim=True).to(device)  # Convert to mono & move to CPU
-
-    # Apply model for separation
-    with torch.no_grad():
-        sources = apply_model(model, audio, split=True)[0].cpu()  # Ensure output is on CPU
-
-    # Prepare output directory
-    output_dir = os.path.join(output_path, 'htdemucs', base_filename)
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Convert tensors to numpy arrays and save
-    save_audio(sources[0].numpy(), f"{output_dir}/vocals.wav", model.samplerate)
-    save_audio(sources[1].numpy(), f"{output_dir}/no_vocals.wav", model.samplerate)
+    """ Runs Demucs audio separation on an uploaded file using subprocess. """
+    command = [
+        'demucs',
+        '--two-stems=vocals',
+        '-o',
+        output_path,
+        input_path
+    ]
+    
+    try:
+        result = subprocess.run(
+            command,
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+        app.logger.debug(f'Demucs output: {result.stdout}')
+    except subprocess.CalledProcessError as e:
+        app.logger.error(f'Demucs error: {e.stderr}')
+        raise
 
 @app.route('/')
 def index():
@@ -86,4 +83,4 @@ def handler(event, context):
     return app(event, context)
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=5000)
